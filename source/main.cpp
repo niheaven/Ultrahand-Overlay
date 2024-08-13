@@ -3356,7 +3356,68 @@ public:
             std::set<std::string> hiddenOverlayList;
             
             std::string overlayFileName;
-            
+
+            std::string base_lang{"en"};
+            tsl::hlp::doWithSmSession([&base_lang] {
+                Result rc;
+                if(R_SUCCEEDED(rc = setInitialize())) {
+                    u64 languageCode;
+                    if (R_SUCCEEDED(rc = setGetSystemLanguage(&languageCode))) {
+                        SetLanguage language{SetLanguage_ENUS};
+                        if (R_SUCCEEDED(rc = setMakeLanguage(languageCode, &language))) {
+                            switch (language) {
+                            case SetLanguage_JA:
+                                base_lang = "ja";
+                                break;
+                            case SetLanguage_ENUS:
+                            case SetLanguage_ENGB:
+                                base_lang = "en";
+                                break;
+                            case SetLanguage_FR:
+                            case SetLanguage_FRCA:
+                                base_lang = "fr";
+                                break;
+                            case SetLanguage_DE:
+                                base_lang = "de";
+                                break;
+                            case SetLanguage_IT:
+                                base_lang = "it";
+                                break;
+                            case SetLanguage_ES:
+                            case SetLanguage_ES419:
+                                base_lang = "es";
+                                break;
+                            case SetLanguage_ZHCN:
+                            case SetLanguage_ZHHANS:
+                                base_lang = "zh-Hans";
+                                break;
+                            case SetLanguage_KO:
+                                base_lang = "ko";
+                                break;
+                            case SetLanguage_NL:
+                                base_lang = "nl";
+                                break;
+                            case SetLanguage_PT:
+                            case SetLanguage_PTBR:
+                                base_lang = "pt";
+                                break;
+                            case SetLanguage_RU:
+                                base_lang = "ru";
+                                break;
+                            case SetLanguage_ZHTW:
+                            case SetLanguage_ZHHANT:
+                                base_lang = "zh-Hant";
+                                break;
+                            default:
+                                base_lang = "en";
+                                break;
+                            }
+                        }
+                    }
+                    setExit();
+                }
+            });
+
             // Load subdirectories
             if (!overlayFiles.empty()) {
                 // Load the INI file and parse its content.
@@ -3389,7 +3450,23 @@ public:
                     //if (overlayFileName == "ovlmenu.ovl" || overlayFileName.front() == '.') {
                     //    continue;
                     //}
-                
+
+                    auto [result, overlayName, overlayVersion] = getOverlayInfo(OVERLAY_PATH + overlayFileName);
+                    if (result != ResultSuccess) continue;
+
+                    std::string pluginLangPath = std::string("sdmc:/switch/.overlays/lang/") + overlayName + "/" + base_lang + ".json";
+                    if (isFileOrDirectory(pluginLangPath)) {
+                        json_t *langData = readJsonFromFile(pluginLangPath);
+                        std::string pluginName = getStringFromJson(langData, "PluginName");
+                        if (!pluginName.empty()) {
+                            overlayName = pluginName;
+                        }
+                        if (langData != nullptr) {
+                            json_decref(langData);
+                            langData = nullptr;
+                        }
+                    }
+
                     auto it = overlaysIniData.find(overlayFileName);
                     if (it == overlaysIniData.end()) {
                         // Initialization of new entries
@@ -3400,8 +3477,6 @@ public:
                         setIniFileValue(OVERLAYS_INI_FILEPATH, overlayFileName, LAUNCH_ARGS_STR, "");
                         setIniFileValue(OVERLAYS_INI_FILEPATH, overlayFileName, "custom_name", "");
                         setIniFileValue(OVERLAYS_INI_FILEPATH, overlayFileName, "custom_version", "");
-                        const auto& [result, overlayName, overlayVersion] = getOverlayInfo(OVERLAY_PATH + overlayFileName);
-                        if (result != ResultSuccess) continue;
                         overlayList.insert("0020"+(overlayName)+":" + overlayFileName);
                     } else {
                         const std::string& priority = getValueOrDefault(it->second, PRIORITY_STR, "20", formatPriorityString, 1);
@@ -3413,16 +3488,11 @@ public:
                         const std::string& customVersion = getValueOrDefault(it->second, "custom_version", "");
                         
                         std::string assignedOverlayName, assignedOverlayVersion;
-
-                        const auto& [result, overlayName, overlayVersion] = getOverlayInfo(OVERLAY_PATH + overlayFileName);
-                        if (result != ResultSuccess) continue;
-
-                        if (!customName.empty()){
+                        if (!customName.empty()) {
                             assignedOverlayName = customName;
                         } else
                             assignedOverlayName = overlayName;
-
-                        if (!customVersion.empty()){
+                        if (!customVersion.empty()) {
                             assignedOverlayVersion = customVersion;
                         } else
                             assignedOverlayVersion = overlayVersion;
